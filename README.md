@@ -1,160 +1,196 @@
-# Series Points Management API
+# CA Firm Management App (MVP)
 
-This is a lightweight FastAPI backend for a tournament/series point table.
+A simple FastAPI + SQLite application for chartered accountancy firms to manage:
 
-It supports your requested rules:
-
-- Up to **6 scorer users** can update data.
-- **Captains and players are view-only**.
-- Series duration is limited to **3 months (92 days)**.
-- Calculates:
-  - **Man of the Match** per round
-  - **Winner Team** at series end
-  - **Man of the Series** at series end
+- Client master data.
+- Assignment planning (due dates, ownership, progress).
+- Billing and payment status.
+- Reminder scheduling.
+- Excel bulk upload with preview, validation, duplicate checks, error reporting, and audit logs.
 
 ---
 
-## 1) Download the project
+## 1) Feature Architecture
 
-### Option A: If you use Git
+### A. Core Modules
 
-```bash
-git clone <your-repo-url>
-cd Sid
+1. **Identity & Users**
+   - Roles: `admin`, `partner`, `manager`, `staff`.
+   - Admin can provision users.
+
+2. **Client Master**
+   - Stores client code, legal identity, PAN/GSTIN, contact details, status, ownership (partner/manager).
+
+3. **Assignment Tracker**
+   - Tracks deliverables such as GST return, TDS filing, ITR, audit.
+   - Captures period, due date, responsible person, progress %, and assignment status.
+
+4. **Billing & Collections**
+   - Links invoices to clients (and optionally to assignments).
+   - Tracks gross, tax, paid amount, and payment status (`unpaid`, `partial`, `paid`).
+
+5. **Reminders**
+   - Schedules reminders by channel (`email`, `sms`, `whatsapp`, `call`).
+   - Supports assignment-level due reminders and general client reminders.
+
+6. **Bulk Upload Engine**
+   - Accepts `.xlsx` template with strict headers.
+   - Performs field-level validation, duplicate detection (within file + database), and row-level preview before commit.
+
+7. **Audit Trail**
+   - Logs critical create/update/upload actions with actor and payload summary.
+
+### B. Technical Architecture (MVP)
+
+- **API Layer**: FastAPI endpoints for all modules.
+- **Validation Layer**: Pydantic + custom regex/domain checks.
+- **Persistence**: SQLAlchemy ORM over SQLite.
+- **Ingestion Layer**: `openpyxl` parser for Excel preview/commit flow.
+- **Observability**: `audit_logs` and `upload_errors` tables.
+
+---
+
+## 2) Database Schema
+
+### Primary Entities
+
+- `users`
+- `clients`
+- `assignments`
+- `billing_records`
+- `reminders`
+- `upload_sessions`
+- `upload_errors`
+- `audit_logs`
+
+### Entity Relationships
+
+- `clients (1) -> (N) assignments`
+- `clients (1) -> (N) billing_records`
+- `clients (1) -> (N) reminders`
+- `upload_sessions (1) -> (N) upload_errors`
+
+### Design Notes
+
+- Unique keys: `clients.client_code`, `clients.pan`, `billing_records.invoice_number`.
+- Upload staging: valid rows stored on `upload_sessions.staged_valid_rows` (JSON) for two-step preview/commit.
+- Audit captures entity, action, actor, timestamp, and details.
+
+---
+
+## 3) Excel Bulk Upload Workflow
+
+### Template Headers (strict order)
+
+```text
+client_code, client_name, entity_type, pan, gstin, email, phone, assigned_partner, assigned_manager, status
 ```
 
-### Option B: Without Git (easy for other users)
+### Step-by-Step
 
-1. Open repository in browser.
-2. Click **Code** → **Download ZIP**.
-3. Extract ZIP.
-4. Open terminal in extracted folder.
+1. **Upload Preview** (`POST /bulk-upload/preview`)
+   - Validates file extension (`.xlsx`), readability, and header template.
+   - Validates each row:
+     - Required fields.
+     - PAN / phone / GSTIN format.
+     - Status value (`active`/`inactive`).
+     - Duplicate in-file (`client_code`, `pan`).
+     - Duplicate in database (`client_code`, `pan`).
+   - Writes granular issues into `upload_errors`.
+   - Returns summary and row-level preview.
+
+2. **User Review**
+   - Client can inspect valid and invalid rows from preview response.
+   - Invalid rows can be corrected in source and reuploaded.
+
+3. **Commit Upload** (`POST /bulk-upload/commit/{session_id}`)
+   - Inserts only staged valid rows.
+   - Re-checks duplicates before final insert to handle concurrent data changes.
+   - Marks session as committed and logs inserted/skipped counts.
 
 ---
 
-## 2) Run locally on Windows
+## 4) Business Workflows
 
-### Prerequisites
+### A. Client Onboarding
 
-- Python 3.10+ installed from [python.org](https://www.python.org/downloads/)
-- During install, check **"Add Python to PATH"**
+1. Create client manually (`POST /clients`) or via bulk upload preview+commit.
+2. Assign partner and manager ownership.
+3. Verify client appears in `GET /clients`.
 
-### PowerShell commands
+### B. Assignment Lifecycle
 
-```powershell
-cd C:\path\to\Sid
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+1. Create assignment with due date and responsibility (`POST /assignments`).
+2. Track progress (`PATCH /assignments/{id}/progress`).
+3. List upcoming deliverables (`GET /dashboard/upcoming-dues`).
+
+### C. Billing Lifecycle
+
+1. Create invoice (`POST /billing`).
+2. Track payment status (`unpaid`, `partial`, `paid`) by paid amount.
+
+### D. Reminder Lifecycle
+
+1. Add reminder for due tasks (`POST /reminders`).
+2. Use date + channel for operational follow-up.
+
+### E. Compliance & Accountability
+
+- Every critical mutation records audit events (`GET /audit-logs`).
+
+---
+
+## 5) API Endpoints (MVP)
+
+- `POST /users`
+- `POST /clients`
+- `GET /clients`
+- `POST /assignments`
+- `PATCH /assignments/{assignment_id}/progress`
+- `POST /billing`
+- `POST /reminders`
+- `GET /dashboard/upcoming-dues`
+- `POST /bulk-upload/preview`
+- `POST /bulk-upload/commit/{session_id}`
+- `GET /audit-logs`
+
+---
+
+## 6) MVP Implementation Plan
+
+### Phase 1 (Week 1) — Foundation
+
+- Bootstrap FastAPI app, ORM models, migrations strategy.
+- Seed admin user and role policy.
+- Implement client + assignment + billing + reminder CRUD.
+
+### Phase 2 (Week 2) — Bulk Upload
+
+- Add Excel template contract.
+- Implement preview parser and validation engine.
+- Implement row-level error capture + upload sessions.
+- Add commit step with duplicate recheck.
+
+### Phase 3 (Week 3) — Operations & Governance
+
+- Add upcoming-due dashboard endpoint.
+- Add full audit logging coverage.
+- Add basic smoke tests and API examples.
+
+### Phase 4 (Post-MVP)
+
+- Replace SQLite with PostgreSQL.
+- Add authentication (JWT/SSO) and row-level permissions.
+- Add scheduler for auto reminder dispatch (email/WhatsApp/SMS integrations).
+- Add analytics dashboards (team workload, aging receivables, SLA adherence).
+
+---
+
+## 7) Run Locally
+
+```bash
 pip install -r requirements.txt
-uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app:app --reload
 ```
 
-Open docs:
-
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
----
-
-## 3) Run on Linux / macOS
-
-```bash
-cd /path/to/Sid
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app:app --host 0.0.0.0 --port 8000 --reload
-```
-
----
-
-## 4) Let other users on your network use it
-
-If your PC/server IP is `192.168.1.20`, users on same Wi-Fi/LAN can open:
-
-- `http://192.168.1.20:8000/docs`
-
-Important:
-
-- Keep `--host 0.0.0.0` in uvicorn command.
-- Allow inbound TCP **8000** in firewall.
-- Keep machine running while users access.
-
----
-
-## 5) Run with Docker (good for sharing)
-
-This repo includes a `Dockerfile`.
-
-```bash
-docker build -t series-points-api .
-docker run -p 8000:8000 series-points-api
-```
-
-Then open `http://localhost:8000/docs`.
-
-For another user: publish on a server and share server IP/domain.
-
----
-
-## 6) Minimal auth/roles behavior
-
-Every request needs header: `x-user-id`.
-
-- `scorer` → can create/update records
-- `captain` / `player` → read-only APIs
-
-Default bootstrap user is auto-created:
-
-- `id = 1`
-- `name = Default Scorer`
-- `role = scorer`
-
-So initially, send:
-
-```http
-x-user-id: 1
-```
-
----
-
-## 7) API flow (recommended)
-
-1. `POST /users` → create captains, players, extra scorers (max 6 scorers total)
-2. `POST /series` → create a series (<= 92 days)
-3. `POST /teams` → create teams with captain IDs
-4. `POST /members` → add captain/player users into teams
-5. `POST /rounds` → create rounds
-6. `POST /team-points` + `POST /player-performance` each round
-7. `GET /rounds/{round_id}/man-of-match`
-8. `GET /series/{series_id}/standings`
-
----
-
-## 8) Deploy so anyone can use it online
-
-To let users outside your local network access it 24/7, deploy on a cloud host:
-
-- Render, Railway, Fly.io, Azure, AWS, GCP, DigitalOcean, etc.
-
-Typical steps:
-
-1. Push repo to GitHub.
-2. Create web service in host.
-3. Build command: `pip install -r requirements.txt`
-4. Start command: `uvicorn app:app --host 0.0.0.0 --port $PORT`
-5. Share generated HTTPS URL.
-
----
-
-## 9) Notes for production
-
-Current app uses SQLite (`league.db`) and very simple header auth for prototyping.
-
-For production/many concurrent users, add:
-
-- PostgreSQL/MySQL instead of SQLite
-- proper login/auth (JWT/OAuth)
-- HTTPS, backups, audit logs
-- input validation and duplicate constraints
-- role management UI/frontend
+Open API docs: `http://127.0.0.1:8000/docs`

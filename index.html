@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CA Firm Manager - Dependency Free</title>
+  <style>
+    :root { --bg:#f4f7fb; --card:#fff; --text:#10213a; --muted:#5f6b7a; --primary:#1f67ff; --danger:#d92d20; --ok:#067647; }
+    body { margin:0; font-family:Arial,Helvetica,sans-serif; background:var(--bg); color:var(--text);} 
+    header { background:#0f274f; color:#fff; padding:14px 20px; }
+    header h1 { margin:0; font-size:20px; }
+    .wrap { padding:16px; max-width:1200px; margin:auto; }
+    .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .tab { border:none; padding:8px 12px; background:#dbe7ff; border-radius:8px; cursor:pointer; }
+    .tab.active { background:var(--primary); color:#fff; }
+    .card { background:var(--card); border-radius:12px; padding:14px; box-shadow:0 1px 3px rgba(0,0,0,.08); margin-bottom:12px; }
+    .grid { display:grid; grid-template-columns:repeat(4, minmax(170px,1fr)); gap:8px; }
+    .grid label { font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+    input, select, textarea { width:100%; padding:8px; border:1px solid #c6cfdb; border-radius:8px; box-sizing:border-box; }
+    textarea { min-height:90px; }
+    .actions { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+    button { border:none; border-radius:8px; padding:8px 12px; cursor:pointer; background:var(--primary); color:#fff; }
+    button.secondary { background:#64748b; }
+    button.danger { background:var(--danger); }
+    .hint { font-size:12px; color:var(--muted); }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { border-bottom:1px solid #e7edf5; padding:6px; text-align:left; }
+    .pill { padding:2px 8px; border-radius:999px; font-size:12px; color:#fff; }
+    .pill.ok { background:var(--ok); }
+    .pill.warn { background:#b54708; }
+    .pill.err { background:var(--danger); }
+    .hidden { display:none; }
+    .stats { display:grid; grid-template-columns:repeat(4,minmax(120px,1fr)); gap:8px; }
+    .stat { background:#eef3ff; border-radius:10px; padding:10px; }
+    .stat .k { font-size:11px; color:#52607a; }
+    .stat .v { font-size:20px; font-weight:bold; }
+  </style>
+</head>
+<body>
+  <header><h1>CA Firm Manager (Single-File, No Dependency)</h1></header>
+  <div class="wrap">
+    <div class="tabs" id="tabs"></div>
+
+    <section id="dashboard" class="screen card"></section>
+
+    <section id="clients" class="screen card hidden">
+      <h3>Client Master</h3>
+      <div class="grid">
+        <div><label>Client Code</label><input id="c_client_code"></div>
+        <div><label>Client Name</label><input id="c_client_name"></div>
+        <div><label>Entity Type</label><input id="c_entity_type" placeholder="Proprietor / Pvt Ltd"></div>
+        <div><label>PAN</label><input id="c_pan" placeholder="ABCDE1234F"></div>
+        <div><label>GSTIN</label><input id="c_gstin"></div>
+        <div><label>Email</label><input id="c_email"></div>
+        <div><label>Phone</label><input id="c_phone"></div>
+        <div><label>Status</label><select id="c_status"><option>active</option><option>inactive</option></select></div>
+        <div><label>Assigned Partner</label><input id="c_partner"></div>
+        <div><label>Assigned Manager</label><input id="c_manager"></div>
+      </div>
+      <div class="actions"><button onclick="addClient()">Add Client</button></div>
+      <p class="hint">Unique fields: client_code, PAN. Data is stored in localStorage in your browser.</p>
+      <div id="clients_table"></div>
+    </section>
+
+    <section id="assignments" class="screen card hidden">
+      <h3>Assignments</h3>
+      <div class="grid">
+        <div><label>Client</label><select id="a_client"></select></div>
+        <div><label>Type</label><input id="a_type" placeholder="GST Return"></div>
+        <div><label>Period</label><input id="a_period" placeholder="Mar-2026"></div>
+        <div><label>Due Date</label><input id="a_due" type="date"></div>
+        <div><label>Responsible</label><input id="a_responsible"></div>
+        <div><label>Status</label><select id="a_status"><option>not_started</option><option>in_progress</option><option>completed</option><option>on_hold</option></select></div>
+        <div><label>Progress %</label><input id="a_progress" type="number" min="0" max="100" value="0"></div>
+      </div>
+      <div class="actions"><button onclick="addAssignment()">Add Assignment</button></div>
+      <div id="assignments_table"></div>
+    </section>
+
+    <section id="billing" class="screen card hidden">
+      <h3>Billing</h3>
+      <div class="grid">
+        <div><label>Client</label><select id="b_client"></select></div>
+        <div><label>Invoice #</label><input id="b_invoice"></div>
+        <div><label>Invoice Date</label><input id="b_date" type="date"></div>
+        <div><label>Amount</label><input id="b_amount" type="number" step="0.01"></div>
+        <div><label>Tax</label><input id="b_tax" type="number" step="0.01" value="0"></div>
+        <div><label>Paid</label><input id="b_paid" type="number" step="0.01" value="0"></div>
+      </div>
+      <div class="actions"><button onclick="addBilling()">Add Invoice</button></div>
+      <div id="billing_table"></div>
+    </section>
+
+    <section id="reminders" class="screen card hidden">
+      <h3>Reminders</h3>
+      <div class="grid">
+        <div><label>Client</label><select id="r_client"></select></div>
+        <div><label>Date</label><input id="r_date" type="date"></div>
+        <div><label>Channel</label><select id="r_channel"><option>email</option><option>sms</option><option>whatsapp</option><option>call</option></select></div>
+        <div><label>Message</label><input id="r_message"></div>
+      </div>
+      <div class="actions"><button onclick="addReminder()">Add Reminder</button></div>
+      <div id="reminders_table"></div>
+    </section>
+
+    <section id="upload" class="screen card hidden">
+      <h3>Bulk Upload (Excel-Compatible CSV)</h3>
+      <p class="hint">Prepare in Excel and <b>Save As CSV</b>. Required headers:<br>
+      client_code,client_name,entity_type,pan,gstin,email,phone,assigned_partner,assigned_manager,status</p>
+      <div class="grid">
+        <div style="grid-column: span 2;"><label>Upload CSV file</label><input type="file" id="csv_file" accept=".csv" /></div>
+        <div style="grid-column: span 2;"><label>Or paste CSV content</label><textarea id="csv_text"></textarea></div>
+      </div>
+      <div class="actions">
+        <button onclick="previewBulk()">Preview</button>
+        <button class="secondary" onclick="commitBulk()">Commit Valid Rows</button>
+      </div>
+      <div id="upload_summary"></div>
+      <div id="upload_preview"></div>
+    </section>
+
+    <section id="audit" class="screen card hidden">
+      <h3>Audit Log</h3>
+      <div class="actions"><button class="danger" onclick="clearAll()">Reset All Data</button></div>
+      <div id="audit_table"></div>
+    </section>
+  </div>
+
+<script>
+const DB_KEY = 'ca_firm_manager_v1';
+const EXPECTED_HEADERS = ['client_code','client_name','entity_type','pan','gstin','email','phone','assigned_partner','assigned_manager','status'];
+const PAN=/^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const GSTIN=/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+const PHONE=/^[0-9]{10}$/;
+const EMAIL=/^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+let state = loadState();
+let previewBuffer = null;
+
+const tabs = [
+  ['dashboard','Dashboard'],['clients','Clients'],['assignments','Assignments'],
+  ['billing','Billing'],['reminders','Reminders'],['upload','Bulk Upload'],['audit','Audit Logs']
+];
+
+function loadState(){
+  const raw = localStorage.getItem(DB_KEY);
+  if(raw) return JSON.parse(raw);
+  return {clients:[], assignments:[], billing:[], reminders:[], audit:[]};
+}
+function saveState(){ localStorage.setItem(DB_KEY, JSON.stringify(state)); }
+function now(){ return new Date().toISOString(); }
+function esc(s){ return (s??'').toString().replaceAll('&','&amp;').replaceAll('<','&lt;'); }
+
+function log(action, entity, details){
+  state.audit.unshift({ts:now(), action, entity, details});
+  saveState();
+}
+
+function setTabs(){
+  const box=document.getElementById('tabs');
+  box.innerHTML=tabs.map(([id,name],i)=>`<button class="tab ${i===0?'active':''}" onclick="show('${id}', this)">${name}</button>`).join('');
+}
+function show(id,el){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  renderAll();
+}
+
+function validateClient(c){
+  const errs=[];
+  for (const k of ['client_code','client_name','entity_type','pan','email','phone','status']) if(!c[k]) errs.push(`${k}: required`);
+  if(c.pan && !PAN.test(c.pan.toUpperCase())) errs.push('pan: invalid format');
+  if(c.gstin && !GSTIN.test(c.gstin.toUpperCase())) errs.push('gstin: invalid format');
+  if(c.phone && !PHONE.test(c.phone)) errs.push('phone: invalid format');
+  if(c.email && !EMAIL.test(c.email)) errs.push('email: invalid format');
+  if(c.status && !['active','inactive'].includes(c.status.toLowerCase())) errs.push('status: invalid value');
+  return errs;
+}
+
+function addClient(){
+  const c = {
+    id: crypto.randomUUID(),
+    client_code: val('c_client_code'), client_name: val('c_client_name'), entity_type: val('c_entity_type'),
+    pan: val('c_pan').toUpperCase(), gstin: val('c_gstin').toUpperCase(), email: val('c_email'), phone: val('c_phone'),
+    assigned_partner: val('c_partner'), assigned_manager: val('c_manager'), status: val('c_status').toLowerCase()
+  };
+  const errs = validateClient(c);
+  if(state.clients.some(x => x.client_code===c.client_code)) errs.push('client_code: duplicate');
+  if(state.clients.some(x => x.pan===c.pan)) errs.push('pan: duplicate');
+  if(errs.length) return alert('Cannot save client:\n- '+errs.join('\n- '));
+  state.clients.push(c); saveState(); log('create','client',{client_code:c.client_code}); renderAll();
+}
+
+function addAssignment(){
+  const a = {id:crypto.randomUUID(), client_id:val('a_client'), type:val('a_type'), period:val('a_period'), due_date:val('a_due'), responsible:val('a_responsible'), status:val('a_status'), progress:Math.max(0,Math.min(100,Number(val('a_progress')||0)))};
+  if(!a.client_id||!a.type||!a.period||!a.due_date) return alert('Please fill required assignment fields');
+  state.assignments.push(a); saveState(); log('create','assignment',{type:a.type, client_id:a.client_id}); renderAll();
+}
+
+function addBilling(){
+  const amount=Number(val('b_amount')||0), tax=Number(val('b_tax')||0), paid=Number(val('b_paid')||0), total=amount+tax;
+  if(!val('b_client')||!val('b_invoice')||!val('b_date')||amount<=0) return alert('Fill all billing fields and amount > 0');
+  if(state.billing.some(x=>x.invoice===val('b_invoice'))) return alert('Duplicate invoice number');
+  if(paid>total) return alert('Paid amount cannot exceed total');
+  const status = paid===0?'unpaid':(paid===total?'paid':'partial');
+  state.billing.push({id:crypto.randomUUID(), client_id:val('b_client'), invoice:val('b_invoice'), date:val('b_date'), amount, tax, total, paid, status});
+  saveState(); log('create','billing',{invoice:val('b_invoice'),status}); renderAll();
+}
+
+function addReminder(){
+  const r={id:crypto.randomUUID(), client_id:val('r_client'), date:val('r_date'), channel:val('r_channel'), message:val('r_message'), sent:false};
+  if(!r.client_id||!r.date||!r.message) return alert('Fill reminder fields');
+  state.reminders.push(r); saveState(); log('create','reminder',{client_id:r.client_id,date:r.date}); renderAll();
+}
+
+function parseCsvLine(line){
+  const out=[]; let cur=''; let q=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){ if(q && line[i+1]==='"'){ cur+='"'; i++; } else q=!q; }
+    else if(ch===',' && !q){ out.push(cur); cur=''; }
+    else cur+=ch;
+  }
+  out.push(cur);
+  return out.map(x=>x.trim());
+}
+
+async function readCsvInput(){
+  const file=document.getElementById('csv_file').files[0];
+  if(file) return (await file.text()).trim();
+  return val('csv_text').trim();
+}
+
+async function previewBulk(){
+  const csv = await readCsvInput();
+  if(!csv) return alert('Upload or paste CSV data');
+  const lines=csv.split(/\r?\n/).filter(x=>x.trim().length);
+  const headers=parseCsvLine(lines[0]).map(x=>x.toLowerCase());
+  if(JSON.stringify(headers)!==JSON.stringify(EXPECTED_HEADERS)){
+    return alert('Invalid headers. Expected:\n'+EXPECTED_HEADERS.join(','));
+  }
+
+  const seenCode=new Set(), seenPan=new Set();
+  const valid=[]; const preview=[]; let dup=0, err=0;
+  for(let i=1;i<lines.length;i++){
+    const row=parseCsvLine(lines[i]);
+    const obj={}; headers.forEach((h,idx)=>obj[h]=(row[idx]||'').trim());
+    obj.pan=(obj.pan||'').toUpperCase(); obj.gstin=(obj.gstin||'').toUpperCase(); obj.status=(obj.status||'').toLowerCase();
+    const e=validateClient(obj);
+    if(obj.client_code && seenCode.has(obj.client_code)) e.push('client_code: duplicate_in_file');
+    if(obj.pan && seenPan.has(obj.pan)) e.push('pan: duplicate_in_file');
+    if(state.clients.some(x=>x.client_code===obj.client_code)) e.push('client_code: duplicate_in_database');
+    if(state.clients.some(x=>x.pan===obj.pan)) e.push('pan: duplicate_in_database');
+    seenCode.add(obj.client_code); seenPan.add(obj.pan);
+    if(e.length){ err++; if(e.some(x=>x.includes('duplicate'))) dup++; preview.push({row:i+1,status:'error',errors:e}); }
+    else { valid.push({...obj,id:crypto.randomUUID()}); preview.push({row:i+1,status:'valid',data:obj}); }
+  }
+
+  previewBuffer={valid,preview,summary:{total_rows:lines.length-1,valid_rows:valid.length,error_rows:err,duplicate_rows:dup}};
+  log('preview','bulk_upload',previewBuffer.summary);
+  renderUpload();
+}
+
+function commitBulk(){
+  if(!previewBuffer) return alert('Run Preview first');
+  let inserted=0, skipped=0;
+  for(const c of previewBuffer.valid){
+    if(state.clients.some(x=>x.client_code===c.client_code||x.pan===c.pan)){ skipped++; continue; }
+    state.clients.push(c); inserted++;
+  }
+  saveState();
+  log('commit','bulk_upload',{inserted,skipped,preview_summary:previewBuffer.summary});
+  alert(`Commit complete. Inserted: ${inserted}, Skipped: ${skipped}`);
+  previewBuffer=null;
+  renderAll();
+}
+
+function clearAll(){ if(!confirm('This will remove all app data. Continue?')) return; localStorage.removeItem(DB_KEY); state=loadState(); previewBuffer=null; renderAll(); }
+
+function renderAll(){
+  renderDashboard(); renderClientSelects(); renderClients(); renderAssignments(); renderBilling(); renderReminders(); renderUpload(); renderAudit();
+}
+
+function renderDashboard(){
+  const today=new Date().toISOString().slice(0,10);
+  const dues=state.assignments.filter(a=>a.status!=='completed'&&a.due_date>=today).sort((a,b)=>a.due_date.localeCompare(b.due_date)).slice(0,8);
+  document.getElementById('dashboard').innerHTML=`
+    <h3>Dashboard</h3>
+    <div class="stats">
+      <div class="stat"><div class="k">Clients</div><div class="v">${state.clients.length}</div></div>
+      <div class="stat"><div class="k">Assignments</div><div class="v">${state.assignments.length}</div></div>
+      <div class="stat"><div class="k">Invoices</div><div class="v">${state.billing.length}</div></div>
+      <div class="stat"><div class="k">Reminders</div><div class="v">${state.reminders.length}</div></div>
+    </div>
+    <h4>Upcoming Due Assignments</h4>
+    ${table(['Client','Type','Due Date','Status','Progress'], dues.map(a=>{
+      const c=state.clients.find(x=>x.id===a.client_id); const cls=a.status==='completed'?'ok':(a.status==='in_progress'?'warn':'err');
+      return [esc(c?.client_name||'-'),esc(a.type),a.due_date,`<span class="pill ${cls}">${esc(a.status)}</span>`,`${a.progress}%`];
+    }))}
+  `;
+}
+
+function renderClientSelects(){
+  const opts=['<option value="">Select Client</option>', ...state.clients.map(c=>`<option value="${c.id}">${esc(c.client_name)} (${esc(c.client_code)})</option>`)];
+  ['a_client','b_client','r_client'].forEach(id=>document.getElementById(id).innerHTML=opts.join(''));
+}
+
+function renderClients(){
+  document.getElementById('clients_table').innerHTML=table(
+    ['Code','Name','PAN','Phone','Status','Partner','Manager'],
+    state.clients.map(c=>[esc(c.client_code),esc(c.client_name),esc(c.pan),esc(c.phone),esc(c.status),esc(c.assigned_partner),esc(c.assigned_manager)])
+  );
+}
+
+function renderAssignments(){
+  document.getElementById('assignments_table').innerHTML=table(
+    ['Client','Type','Period','Due','Responsible','Status','Progress'],
+    state.assignments.map(a=>{
+      const c=state.clients.find(x=>x.id===a.client_id);
+      return [esc(c?.client_name||'-'),esc(a.type),esc(a.period),a.due_date,esc(a.responsible),esc(a.status),`${a.progress}%`];
+    })
+  );
+}
+
+function renderBilling(){
+  document.getElementById('billing_table').innerHTML=table(
+    ['Client','Invoice','Date','Amount','Tax','Total','Paid','Status'],
+    state.billing.map(b=>{
+      const c=state.clients.find(x=>x.id===b.client_id);
+      return [esc(c?.client_name||'-'),esc(b.invoice),b.date,b.amount.toFixed(2),b.tax.toFixed(2),b.total.toFixed(2),b.paid.toFixed(2),esc(b.status)];
+    })
+  );
+}
+
+function renderReminders(){
+  document.getElementById('reminders_table').innerHTML=table(
+    ['Client','Date','Channel','Message','Sent'],
+    state.reminders.map(r=>{
+      const c=state.clients.find(x=>x.id===r.client_id);
+      return [esc(c?.client_name||'-'),r.date,esc(r.channel),esc(r.message),r.sent?'Yes':'No'];
+    })
+  );
+}
+
+function renderUpload(){
+  const s = previewBuffer?.summary;
+  document.getElementById('upload_summary').innerHTML = s ? `<div class="stats">
+    <div class="stat"><div class="k">Total Rows</div><div class="v">${s.total_rows}</div></div>
+    <div class="stat"><div class="k">Valid Rows</div><div class="v">${s.valid_rows}</div></div>
+    <div class="stat"><div class="k">Error Rows</div><div class="v">${s.error_rows}</div></div>
+    <div class="stat"><div class="k">Duplicate Rows</div><div class="v">${s.duplicate_rows}</div></div>
+  </div>` : '<p class="hint">No preview yet.</p>';
+
+  if(!previewBuffer) return document.getElementById('upload_preview').innerHTML='';
+  document.getElementById('upload_preview').innerHTML=table(
+    ['Row','Status','Details'],
+    previewBuffer.preview.map(r=>[
+      r.row,
+      r.status==='valid'?'<span class="pill ok">valid</span>':'<span class="pill err">error</span>',
+      r.status==='valid'?esc(JSON.stringify(r.data)):esc(r.errors.join('; '))
+    ])
+  );
+}
+
+function renderAudit(){
+  document.getElementById('audit_table').innerHTML=table(
+    ['Timestamp','Action','Entity','Details'],
+    state.audit.map(a=>[a.ts,esc(a.action),esc(a.entity),esc(JSON.stringify(a.details))])
+  );
+}
+
+function table(headers, rows){
+  return `<table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join(''):'<tr><td colspan="99">No data</td></tr>'}</tbody></table>`;
+}
+function val(id){ return document.getElementById(id).value.trim(); }
+
+setTabs();
+renderAll();
+</script>
+</body>
+</html>
